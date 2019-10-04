@@ -20,7 +20,7 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/fsouza/go-dockerclient"
+	docker "github.com/fsouza/go-dockerclient"
 	"github.com/hyperledger/fabric/integration/helpers"
 	"github.com/hyperledger/fabric/integration/nwo/commands"
 	"github.com/hyperledger/fabric/integration/nwo/fabricconfig"
@@ -178,7 +178,6 @@ func New(c *Config, rootDir string, client *docker.Client, startPort int, compon
 
 		Organizations: c.Organizations,
 		Consensus:     c.Consensus,
-		OrdererCap:    c.OrdererCap,
 		Orderers:      c.Orderers,
 		Peers:         c.Peers,
 		SystemChannel: c.SystemChannel,
@@ -381,6 +380,19 @@ func (n *Network) PeerUserCert(p *Peer, user string) string {
 	)
 }
 
+// OrdererUserCert returns the path to the certificate for the specified user in
+// the orderer organization.
+func (n *Network) OrdererUserCert(o *Orderer, user string) string {
+	org := n.Organization(o.Organization)
+	Expect(org).NotTo(BeNil())
+
+	return filepath.Join(
+		n.OrdererUserMSPDir(o, user),
+		"signcerts",
+		fmt.Sprintf("%s@%s-cert.pem", user, org.Domain),
+	)
+}
+
 // PeerUserKey returns the path to the private key for the specified user in
 // the peer organization.
 func (n *Network) PeerUserKey(p *Peer, user string) string {
@@ -389,6 +401,25 @@ func (n *Network) PeerUserKey(p *Peer, user string) string {
 
 	keystore := filepath.Join(
 		n.PeerUserMSPDir(p, user),
+		"keystore",
+	)
+
+	// file names are the SKI and non-deterministic
+	keys, err := ioutil.ReadDir(keystore)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(keys).To(HaveLen(1))
+
+	return filepath.Join(keystore, keys[0].Name())
+}
+
+// OrdererUserKey returns the path to the private key for the specified user in
+// the orderer organization.
+func (n *Network) OrdererUserKey(o *Orderer, user string) string {
+	org := n.Organization(o.Organization)
+	Expect(org).NotTo(BeNil())
+
+	keystore := filepath.Join(
+		n.OrdererUserMSPDir(o, user),
 		"keystore",
 	)
 
@@ -1246,23 +1277,25 @@ type PortName string
 type Ports map[PortName]uint16
 
 const (
-	ChaincodePort  PortName = "Chaincode"
-	EventsPort     PortName = "Events"
-	HostPort       PortName = "HostPort"
-	ListenPort     PortName = "Listen"
-	ProfilePort    PortName = "Profile"
-	OperationsPort PortName = "Operations"
+	ChaincodePort    PortName = "Chaincode"
+	EventsPort       PortName = "Events"
+	HostPort         PortName = "HostPort"
+	ListenPort       PortName = "Listen"
+	ProfilePort      PortName = "Profile"
+	OperationsPort   PortName = "Operations"
+	AdminServicePort PortName = "AdminService"
+	ClusterPort      PortName = "Cluster"
 )
 
 // PeerPortNames returns the list of ports that need to be reserved for a Peer.
 func PeerPortNames() []PortName {
-	return []PortName{ListenPort, ChaincodePort, EventsPort, ProfilePort, OperationsPort}
+	return []PortName{ListenPort, ChaincodePort, EventsPort, ProfilePort, OperationsPort, AdminServicePort}
 }
 
 // OrdererPortNames  returns the list of ports that need to be reserved for an
 // Orderer.
 func OrdererPortNames() []PortName {
-	return []PortName{ListenPort, ProfilePort, OperationsPort}
+	return []PortName{ListenPort, ProfilePort, OperationsPort, ClusterPort}
 }
 
 // BrokerPortNames returns the list of ports that need to be reserved for a

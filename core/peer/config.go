@@ -129,7 +129,10 @@ func GetServerConfig() (comm.ServerConfig, error) {
 	secureOptions := &comm.SecureOptions{
 		UseTLS: viper.GetBool("peer.tls.enabled"),
 	}
-	serverConfig := comm.ServerConfig{SecOpts: secureOptions}
+	serverConfig := comm.ServerConfig{
+		ConnectionTimeout: viper.GetDuration("peer.connectiontimeout"),
+		SecOpts:           secureOptions,
+	}
 	if secureOptions.UseTLS {
 		// get the certs from the file system
 		serverKey, err := ioutil.ReadFile(config.GetPath("peer.tls.key.file"))
@@ -252,4 +255,26 @@ func GetClientCertificate() (tls.Certificate, error) {
 			"error parsing client TLS key pair")
 	}
 	return cert, nil
+}
+
+type addressOverride struct {
+	From string `mapstructure:"from"`
+	To   string `mapstructure:"to"`
+}
+
+func GetOrdererAddressOverrides() (map[string]string, error) {
+	var overrides []addressOverride
+	err := viper.UnmarshalKey("peer.deliveryclient.addressOverrides", &overrides)
+	if err != nil {
+		return nil, err
+	}
+
+	var overrideMap map[string]string
+	if len(overrides) > 0 {
+		overrideMap = make(map[string]string)
+		for _, override := range overrides {
+			overrideMap[override.From] = override.To
+		}
+	}
+	return overrideMap, nil
 }
